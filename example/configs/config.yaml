@@ -1,0 +1,7 @@
+server:
+  http:
+    addr: 0.0.0.0:18080
+
+client:
+  http:
+    endpoint: http://127.0.0.1:18080

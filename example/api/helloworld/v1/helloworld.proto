@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package helloworld.v1;
+
+option go_package = "github.com/aqcool/protoc-gen-go-fiber/example/api/helloworld/v1;v1";
+
+import "google/api/annotations.proto";
+import "google/api/httpbody.proto";
+
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply) {
+    option (google.api.http) = {
+      get: "/helloworld/{name}"
+    };
+  }
+
+  rpc CreateHello (HelloRequest) returns (HelloReply) {
+    option (google.api.http) = {
+      post: "/helloworld"
+      body: "*"
+    };
+  }
+
+  rpc ListHello (HelloRequest) returns (stream HelloReply) {
+    option (google.api.http) = {
+      get: "/helloworld/stream/{name}"
+    };
+  }
+
+  rpc ChatHello (stream HelloRequest) returns (stream HelloReply) {
+    option (google.api.http) = {
+      get: "/helloworld/chat"
+    };
+  }
+
+  rpc UploadHello (UploadHelloRequest) returns (UploadHelloReply) {
+    option (google.api.http) = {
+      post: "/helloworld/upload"
+      body: "body"
+      response_body: "body"
+    };
+  }
+}
+
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloReply {
+  string message = 1;
+}
+
+message UploadHelloRequest {
+  google.api.HttpBody body = 1;
+}
+
+message UploadHelloReply {
+  google.api.HttpBody body = 1;
+}

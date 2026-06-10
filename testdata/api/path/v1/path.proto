@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package path.v1;
+
+option go_package = "github.com/aqcool/protoc-gen-go-fiber/testdata/api/path/v1;pathv1";
+
+import "google/api/annotations.proto";
+
+service Books {
+  rpc GetBook (GetBookRequest) returns (Book) {
+    option (google.api.http) = {
+      get: "/v1/books/{book.id}"
+    };
+  }
+
+  rpc ListMembers (ListMembersRequest) returns (ListMembersReply) {
+    option (google.api.http) = {
+      get: "/v1/members/{name}"
+    };
+  }
+}
+
+message GetBookRequest {
+  Book book = 1;
+}
+
+message ListMembersRequest {
+  string name = 1;
+}
+
+message ListMembersReply {
+  repeated string members = 1;
+}
+
+message Book {
+  string id = 1;
+  string title = 2;
+}

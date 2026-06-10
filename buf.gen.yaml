@@ -1,0 +1,5 @@
+version: v2
+plugins:
+  - local: protoc-gen-go-fiber
+    out: testdata/api
+    opt: paths=source_relative
