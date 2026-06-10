@@ -30,6 +30,27 @@ func startApp(t *testing.T) (baseURL string, shutdown func()) {
 	return "http://" + ln.Addr().String(), func() { _ = app.Shutdown() }
 }
 
+func newClient(t *testing.T, baseURL string) v1.GreeterHTTPClient {
+	t.Helper()
+	return v1.NewGreeterHTTPClient(binding.NewHTTPClient(http.DefaultClient, baseURL))
+}
+
+func readSSEFrames(t *testing.T, r io.Reader) []string {
+	t.Helper()
+	scanner := bufio.NewScanner(r)
+	var frames []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data:") {
+			frames = append(frames, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return frames
+}
+
 func TestGreeterHTTPServer(t *testing.T) {
 	app := server.NewHTTPServer(service.NewGreeterService())
 
@@ -78,17 +99,14 @@ func TestGreeterHTTPServer(t *testing.T) {
 			body, _ := io.ReadAll(resp.Body)
 			t.Fatalf("status=%d body=%s", resp.StatusCode, body)
 		}
-		scanner := bufio.NewScanner(resp.Body)
-		var data string
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.HasPrefix(line, "data:") {
-				data = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-				break
-			}
+		frames := readSSEFrames(t, resp.Body)
+		if len(frames) != 3 {
+			t.Fatalf("frame count=%d want 3 frames=%v", len(frames), frames)
 		}
-		if !strings.Contains(data, "sse") {
-			t.Fatalf("sse data=%q", data)
+		for i, suffix := range []string{"one", "two", "three"} {
+			if !strings.Contains(frames[i], "sse") || !strings.Contains(frames[i], suffix) {
+				t.Fatalf("frame[%d]=%q", i, frames[i])
+			}
 		}
 	})
 
@@ -108,48 +126,103 @@ func TestGreeterHTTPServer(t *testing.T) {
 			t.Fatalf("body=%q", body)
 		}
 	})
+
+	// WebSocket 无法通过 app.Test 完成 upgrade，使用真实 Listener 验证 ChatHello。
+	t.Run("ChatHello", func(t *testing.T) {
+		baseURL, shutdown := startApp(t)
+		defer shutdown()
+
+		chat, err := newClient(t, baseURL).ChatHello(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer chat.Close()
+		if err := chat.Send(&v1.HelloRequest{Name: "server-ws"}); err != nil {
+			t.Fatal(err)
+		}
+		reply, err := chat.Recv()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reply.GetMessage() != "chat server-ws" {
+			t.Fatalf("reply=%q", reply.GetMessage())
+		}
+	})
 }
 
 func TestGreeterHTTPClient(t *testing.T) {
 	baseURL, shutdown := startApp(t)
 	defer shutdown()
+	client := newClient(t, baseURL)
+	ctx := context.Background()
 
-	client := v1.NewGreeterHTTPClient(binding.NewHTTPClient(http.DefaultClient, baseURL))
-
-	reply, err := client.SayHello(context.Background(), &v1.HelloRequest{Name: "client"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reply.GetMessage() != "hello client" {
-		t.Fatalf("reply=%q", reply.GetMessage())
-	}
-
-	chat, err := client.ChatHello(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer chat.Close()
-	if err := chat.Send(&v1.HelloRequest{Name: "peer"}); err != nil {
-		t.Fatal(err)
-	}
-	chatReply, err := chat.Recv()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if chatReply.GetMessage() != "chat peer" {
-		t.Fatalf("chat reply=%q", chatReply.GetMessage())
-	}
-
-	uploadReply, err := client.UploadHello(context.Background(), &v1.UploadHelloRequest{
-		Body: &httpbody.HttpBody{
-			ContentType: "text/plain",
-			Data:        []byte("upload"),
-		},
+	t.Run("SayHello", func(t *testing.T) {
+		reply, err := client.SayHello(ctx, &v1.HelloRequest{Name: "client"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reply.GetMessage() != "hello client" {
+			t.Fatalf("reply=%q", reply.GetMessage())
+		}
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(uploadReply.GetBody().GetData()) != "upload" {
-		t.Fatalf("upload body=%q", uploadReply.GetBody().GetData())
-	}
+
+	t.Run("CreateHello", func(t *testing.T) {
+		reply, err := client.CreateHello(ctx, &v1.HelloRequest{Name: "world"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reply.GetMessage() != "created world" {
+			t.Fatalf("reply=%q", reply.GetMessage())
+		}
+	})
+
+	t.Run("ListHello", func(t *testing.T) {
+		stream, err := client.ListHello(ctx, &v1.HelloRequest{Name: "fiber"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer stream.Close()
+		for i, suffix := range []string{"one", "two", "three"} {
+			msg, err := stream.Recv()
+			if err != nil {
+				t.Fatalf("recv[%d]: %v", i, err)
+			}
+			if !strings.Contains(msg.GetMessage(), "fiber") || !strings.Contains(msg.GetMessage(), suffix) {
+				t.Fatalf("msg[%d]=%q", i, msg.GetMessage())
+			}
+		}
+	})
+
+	t.Run("ChatHello", func(t *testing.T) {
+		chat, err := client.ChatHello(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer chat.Close()
+		if err := chat.Send(&v1.HelloRequest{Name: "peer"}); err != nil {
+			t.Fatal(err)
+		}
+		reply, err := chat.Recv()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reply.GetMessage() != "chat peer" {
+			t.Fatalf("reply=%q", reply.GetMessage())
+		}
+	})
+
+	t.Run("UploadHello", func(t *testing.T) {
+		reply, err := client.UploadHello(ctx, &v1.UploadHelloRequest{
+			Body: &httpbody.HttpBody{
+				ContentType: "text/plain",
+				Data:        []byte("upload"),
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(reply.GetBody().GetData()) != "upload" {
+			t.Fatalf("body=%q", reply.GetBody().GetData())
+		}
+	})
 }

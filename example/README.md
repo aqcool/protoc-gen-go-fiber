@@ -40,15 +40,22 @@ make -C example run-server
 make -C example run-client
 ```
 
-## 覆盖的 RPC
+## 测试
 
-| RPC | 类型 | 传输 |
+```bash
+make test
+```
+
+`internal/server/http_test.go` 覆盖全部 5 个 RPC：
+
+| RPC | Server (`app.Test` / TCP) | Client (生成代码) |
 |---|---|---|
-| SayHello | 一元 | GET + 路径参数 |
-| CreateHello | 一元 | POST JSON body |
-| ListHello | 服务端流 | SSE |
-| ChatHello | 双向流 | WebSocket |
-| UploadHello | 一元 | google.api.HttpBody 请求/响应 |
+| SayHello | ✅ | ✅ |
+| CreateHello | ✅ | ✅ |
+| ListHello | ✅（3 帧 SSE） | ✅（3 帧 SSE） |
+| ChatHello | ✅（WebSocket / TCP） | ✅ |
+| UploadHello | ✅ | ✅ |
+
 
 ## 本地依赖
 
