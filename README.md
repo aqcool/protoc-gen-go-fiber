@@ -30,9 +30,24 @@
 
 ## 安装
 
+### 1. 安装 protoc 插件（开发机）
+
 ```bash
-go install github.com/aqcool/protoc-gen-go-fiber@latest
+go install github.com/aqcool/protoc-gen-go-fiber@v0.1.0
 ```
+
+确保 `$GOPATH/bin` 或 `$HOME/go/bin` 在 `PATH` 中，`protoc` 能发现 `protoc-gen-go-fiber`。
+
+### 2. 业务项目引入 binding 运行时
+
+生成代码会 import `binding` 包，在项目 `go.mod` 中添加：
+
+```bash
+go get github.com/aqcool/protoc-gen-go-fiber@v0.1.0
+go get github.com/gofiber/fiber/v3
+```
+
+版本列表见 [pkg.go.dev](https://pkg.go.dev/github.com/aqcool/protoc-gen-go-fiber?tab=versions) 或 [GitHub Releases](https://github.com/aqcool/protoc-gen-go-fiber/releases)。
 
 本地开发（在本仓库根目录）：
 
