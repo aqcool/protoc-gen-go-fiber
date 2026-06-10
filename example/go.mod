@@ -3,7 +3,7 @@ module github.com/aqcool/protoc-gen-go-fiber/example
 go 1.25.0
 
 require (
-	github.com/aqcool/protoc-gen-go-fiber v0.0.0
+	github.com/aqcool/protoc-gen-go-fiber v0.1.0
 	github.com/gofiber/fiber/v3 v3.3.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260511170946-3700d4141b60
 	google.golang.org/protobuf v1.36.11
@@ -31,5 +31,3 @@ require (
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 )
-
-replace github.com/aqcool/protoc-gen-go-fiber => ../
